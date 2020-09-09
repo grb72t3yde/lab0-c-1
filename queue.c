@@ -53,18 +53,20 @@ bool q_insert_head(queue_t *q, char *s)
     if (!newh) {
         return false;
     }
-    newh->value = malloc(strlen(s) * sizeof(char));
+    newh->value = malloc(strlen(s) * sizeof(char) +
+                         1); /* Allocate addtional byte for '\0' */
     if (!newh->value) {
         free(newh);
         return false;
     }
+    memset(newh->value, 0, strlen(s) + 1);
     strncpy(newh->value, s, strlen(s));
     newh->next = q->head;
     q->head = newh;
-    q->size++;
     if (!q->tail) {
         q->tail = newh;
     }
+    q->size++;
     return true;
 }
 
@@ -85,19 +87,21 @@ bool q_insert_tail(queue_t *q, char *s)
     if (!newh) {
         return false;
     }
-    newh->value = malloc(strlen(s) * sizeof(char));
+    newh->value = malloc(strlen(s) * sizeof(char) + 1);
     if (!newh->value) {
         free(newh);
         return false;
     }
+    memset(newh->value, 0, strlen(s) + 1);
     strncpy(newh->value, s, strlen(s));
     newh->next = NULL;
-    q->tail->next = newh;
-    q->tail = newh;
-    q->size++;
     if (!q->head) {
-        q->head = newh;
+        q->head = q->tail = newh;
+    } else {
+        q->tail->next = newh;
+        q->tail = q->tail->next;
     }
+    q->size++;
     return true;
 }
 
@@ -116,16 +120,19 @@ bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
     }
     list_ele_t *index = q->head;
     if (sp) {
-        q->head = q->head->next;
-        memset(sp, '\0', bufsize - 1);
-        strncpy(sp, index->value, bufsize - 1);
-        q->size--;
-        free(index->value);
-        free(index); /* This line make tail pointer point to NULL if the
-                        deletion empty the queue */
-        return true;
+        size_t maxsize = (strlen(index->value) > bufsize - 1)
+                             ? bufsize - 1
+                             : strlen(index->value);
+        memset(sp, 0,
+               maxsize + 1); /* Additional byte copy for the terminator */
+        strncpy(sp, index->value, maxsize);
     }
-    return false;
+    q->head = q->head->next;
+    q->size--;
+    free(index->value);
+    free(index); /* This line make tail pointer point to NULL if the
+                        deletion empty the queue */
+    return true;
 }
 
 /*
@@ -134,10 +141,7 @@ bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
  */
 int q_size(queue_t *q)
 {
-    if (!q) {
-        return 0;
-    }
-    return q->size;
+    return !q ? 0 : q->size;
 }
 
 /*
@@ -152,8 +156,66 @@ void q_reverse(queue_t *q)
     if (!q || !q->head) {
         return;
     }
+    if (q->size == 1) {
+        return;
+    }
+    list_ele_t *prev, *cur, *foward;
+    prev = q->head;
+    cur = prev->next;
+    foward = cur->next;
+
+    while (foward) {
+        cur->next = prev;
+        prev = cur;
+        cur = foward;
+        foward = foward->next;
+    }
+    cur->next = prev;
+    q->tail = q->head;
+    q->head->next = NULL;
+    q->head = cur;
 }
 
+void split_and_merge(list_ele_t **head)
+{
+    if (!(*head)->next) { /* When the list has one node left, bound the
+                             recurssion */
+        return;
+    }
+    list_ele_t *lhead = *head;
+    list_ele_t *rhead = (*head)->next;
+    /* Make rhead point to the mid of the list */
+    while (rhead && rhead->next) { /* Thid condition avoid illegal access */
+        rhead = rhead->next->next;
+        lhead = lhead->next;
+    }
+    rhead = lhead->next;
+    lhead->next = NULL;
+    lhead = *head;
+    split_and_merge(&lhead);
+    split_and_merge(&rhead);
+
+    *head = NULL;
+    list_ele_t **appender = head; /* This appender is used to manipulate
+                                     the pointers in the original list */
+    /* Mergint two lists using local reference */
+    while (lhead && rhead) {
+        if (strcmp(lhead->value, rhead->value) < 0) {
+            (*appender) = lhead;
+            lhead = lhead->next;
+            (*appender)->next = NULL;
+        } else {
+            (*appender) = rhead;
+            rhead = rhead->next;
+            (*appender)->next = NULL;
+        }
+        appender = &((*appender)->next); /* This is a pointer to the "pointer of
+                                     next" in the list node structure */
+
+    }
+    /* Append the remained list */
+    *appender = lhead ? lhead : rhead;
+}
 /*
  * Sort elements of queue in ascending order
  * No effect if q is NULL or empty. In addition, if q has only one
@@ -161,6 +223,11 @@ void q_reverse(queue_t *q)
  */
 void q_sort(queue_t *q)
 {
-    /* TODO: You need to write the code for this function */
-    /* TODO: Remove the above comment when you are about to implement. */
+    if (!q || q->size <= 1) {
+        return;
+    }
+    split_and_merge(&q->head);
+    while (q->tail->next) {
+        q->tail = q->tail->next;
+    }
 }
