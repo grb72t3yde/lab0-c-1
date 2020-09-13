@@ -34,6 +34,7 @@ void q_free(queue_t *q)
         index = q->head;
     }
     free(q);
+    index = NULL;
 }
 
 /*
@@ -57,6 +58,7 @@ bool q_insert_head(queue_t *q, char *s)
                          1); /* Allocate addtional byte for '\0' */
     if (!newh->value) {
         free(newh);
+        newh = NULL;
         return false;
     }
     memset(newh->value, 0, strlen(s) + 1);
@@ -90,6 +92,7 @@ bool q_insert_tail(queue_t *q, char *s)
     newh->value = malloc(strlen(s) * sizeof(char) + 1);
     if (!newh->value) {
         free(newh);
+        newh = NULL;
         return false;
     }
     memset(newh->value, 0, strlen(s) + 1);
@@ -130,8 +133,8 @@ bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
     q->head = q->head->next;
     q->size--;
     free(index->value);
-    free(index); /* This line make tail pointer point to NULL if the
-                        deletion empty the queue */
+    free(index);
+    index = NULL;
     return true;
 }
 
